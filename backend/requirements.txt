@@ -1,0 +1,7 @@
+torch
+transformers
+flask
+whisper
+pydub
+moviepy
+
