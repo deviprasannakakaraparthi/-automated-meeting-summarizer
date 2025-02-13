@@ -1,0 +1,59 @@
+pipeline {
+    agent any
+
+    environment {
+        REPO_URL = 'https://github.com/deviprasannakakaraparthi/-automated-meeting-summarizer.git'
+        IMAGE_NAME = 'meeting-summarizer'
+        CONTAINER_NAME = 'meeting-summarizer-container'
+    }
+
+    stages {
+        stage('Clone Repo') {
+            steps {
+                git REPO_URL
+            }
+        }
+
+        stage('Build Docker Image') {
+            steps {
+                sh '''
+                cd backend
+                docker build -t ${IMAGE_NAME}:latest .
+                '''
+            }
+        }
+
+        stage('Push to Docker Hub') {
+            steps {
+                withCredentials([usernamePassword(credentialsId: 'docker-hub-credentials', usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PASS')]) {
+                    sh '''
+                    echo "$DOCKER_PASS" | docker login -u "$DOCKER_USER" --password-stdin
+                    docker tag ${IMAGE_NAME}:latest ${DOCKER_USER}/${IMAGE_NAME}:latest
+                    docker push ${DOCKER_USER}/${IMAGE_NAME}:latest
+                    '''
+                }
+            }
+        }
+
+        stage('Deploy Container') {
+            steps {
+                sh '''
+                docker stop ${CONTAINER_NAME} || true
+                docker rm ${CONTAINER_NAME} || true
+                docker pull ${DOCKER_USER}/${IMAGE_NAME}:latest
+                docker run -d -p 5000:5000 --name ${CONTAINER_NAME} ${DOCKER_USER}/${IMAGE_NAME}:latest
+                '''
+            }
+        }
+    }
+
+    post {
+        success {
+            echo '✅ Deployment Successful!'
+        }
+        failure {
+            echo '❌ Deployment Failed! Check logs.'
+        }
+    }
+}
+
